@@ -1,4 +1,3 @@
-# src/peer.py
 import socket
 import threading
 import argparse
@@ -14,21 +13,19 @@ class Peer:
         self.port = port
         self.name = name or f"{host}:{port}"
         self.known_peers = known_peers if known_peers else []
-        self.connections = []           # sockets ativos
+        self.connections = []
         self.lock = threading.Lock()
         self.seen_msgs = set()
 
-        # ---- IPC: fila para processo de logging
         self.log_q = Queue()
         self.logger = LoggerProcess(self.log_q, log_path=f"logs/peer_{self.port}.jsonl")
         self.logger.start()
 
-    # -------- infra de log (publica em processo filho) --------
     def log(self, kind: str, payload: dict):
         evt = {
             "ts": time.time(),
             "peer": self.name,
-            "kind": kind,          # connect, recv, send, error, info
+            "kind": kind,
             "data": payload
         }
         try:
@@ -41,11 +38,9 @@ class Peer:
         for peer_host, peer_port in self.known_peers:
             self.connect_to_peer(peer_host, peer_port)
         self._input_loop()
-        # encerramento limpo
         self.shutdown()
 
     def shutdown(self):
-        # fecha conexões
         with self.lock:
             for c in list(self.connections):
                 try:
@@ -53,12 +48,10 @@ class Peer:
                 except Exception:
                     pass
             self.connections.clear()
-        # encerra logger (poison pill)
         try:
             self.log_q.put_nowait(None)
         except Exception:
             pass
-        # não chamamos join() para não travar CLI; processo é daemon
 
     def _start_server(self):
         srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -97,13 +90,12 @@ class Peer:
             msg_id = msg.get("id")
 
             if msg_id in self.seen_msgs:
-                continue  # dup → descarta
+                continue
 
             self.seen_msgs.add(msg_id)
             self.log("recv", {"id": msg_id, "sender": msg.get("sender"), "payload": msg.get("payload")})
             print(f"[RECEBIDO] {msg}")
 
-            # repassa para outros (exceto quem enviou)
             self.broadcast(msg, exclude=conn)
 
         try:
@@ -119,7 +111,7 @@ class Peer:
             if text.lower() == "sair":
                 break
             msg = generate_msg("msg", self.name, text)
-            self.seen_msgs.add(msg["id"])  # marca antes de enviar
+            self.seen_msgs.add(msg["id"])
             self.log("send", {"id": msg["id"], "payload": text})
             self.broadcast(msg)
 

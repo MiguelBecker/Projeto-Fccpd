@@ -1,4 +1,3 @@
-# src/logger_proc.py
 import json
 import os
 import time
@@ -22,13 +21,12 @@ class LoggerProcess(Process):
         f = open(self.log_path, "a", encoding="utf-8")
         try:
             while self._running:
-                evt: Optional[dict] = self.queue.get()  # bloqueante
-                if evt is None:      # poison pill → encerrar
+                evt: Optional[dict] = self.queue.get()
+                if evt is None:
                     break
                 line = json.dumps(evt, ensure_ascii=False)
                 f.write(line + "\n")
                 f.flush()
-                # rotação simples por tamanho
                 if f.tell() >= self.rotate_bytes:
                     f.close()
                     ts = int(time.time())

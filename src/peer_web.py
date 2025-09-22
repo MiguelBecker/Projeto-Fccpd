@@ -1,4 +1,3 @@
-# src/peer_web.py
 import socket
 import threading
 import argparse
@@ -10,8 +9,6 @@ from flask import Flask, Response, request, jsonify, render_template_string
 
 from common import send_msg, recv_msg, generate_msg
 
-
-# ---------------- Peer Core (igual ao GUI, mas sem Tk) ----------------
 class PeerCore:
     def __init__(self, host: str, port: int, known_peers: Optional[List[Tuple[str, int]]] = None, on_message=None, on_log=None):
         self.host = host
@@ -83,9 +80,7 @@ class PeerCore:
             if msg_id in self.seen_msgs:
                 continue
             self.seen_msgs.add(msg_id)
-            # repassa para outros
             self.broadcast(msg, exclude=conn)
-            # entrega para UI
             self.on_message(msg)
         try:
             conn.close()
@@ -99,7 +94,7 @@ class PeerCore:
         msg = generate_msg("msg", sender_name, text)
         self.seen_msgs.add(msg["id"])
         self.broadcast(msg)
-        self.on_message(msg)  # eco local na interface
+        self.on_message(msg)
 
     def broadcast(self, msg, exclude=None):
         with self.lock:
@@ -116,8 +111,6 @@ class PeerCore:
                         pass
                     self.connections.remove(conn)
 
-
-# ---------------- App Web (Flask + SSE) ----------------
 HTML = """<!doctype html>
 <html>
 <head>
@@ -200,18 +193,14 @@ HTML = """<!doctype html>
 
 def create_app(core: PeerCore, ui_name: str, host: str, port: int, http_port: int):
     app = Flask(__name__)
-    # Cada cliente SSE terá sua própria fila; para simplificar, mantemos uma lista fraca
     sse_clients: List[Queue] = []
 
     def push_event(evt: dict):
-        # dispara para todos conectados no /stream
         for q in list(sse_clients):
             try:
                 q.put_nowait(evt)
             except Exception:
                 pass
-
-    # callbacks do core para UI
     def on_message(m):
         push_event(m)
 
@@ -241,7 +230,6 @@ def create_app(core: PeerCore, ui_name: str, host: str, port: int, http_port: in
         sse_clients.append(q)
 
         def gen():
-            # envia um hello
             hello = {"type": "log", "payload": f"[SSE] conectado — {ui_name}"}
             yield f"data: {json.dumps(hello)}\n\n"
             try:
@@ -292,5 +280,4 @@ if __name__ == "__main__":
     core = PeerCore(args.host, args.port, known)
 
     app = create_app(core, ui_name, args.host, args.port, args.http_port)
-    # Flask dev server em thread única já serve pra demo
     app.run(host="127.0.0.1", port=args.http_port, debug=False, threaded=True)

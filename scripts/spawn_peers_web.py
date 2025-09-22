@@ -1,4 +1,3 @@
-# scripts/spawn_peers_web.py
 import sys
 import argparse
 import subprocess
@@ -45,10 +44,7 @@ def main():
 
         p = subprocess.Popen(cmd)
         procs.append(p)
-
-        # Abre a aba do navegador para este peer
         url = f"http://127.0.0.1:{http_port}"
-        # tenta algumas vezes até o servidor subir
         for _ in range(12):
             try:
                 webbrowser.open_new_tab(url)
