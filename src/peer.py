@@ -5,23 +5,20 @@ from common import send_msg, recv_msg, generate_msg
 
 
 class Peer:
-    def __init__(self, host: str, port: int, known_peers=[]):
+    def __init__(self, host: str, port: int, known_peers=None):
         self.host = host
         self.port = port
-        self.known_peers = known_peers  # lista de (host, port)
-        self.connections = []           # lista de sockets ativos
+        self.known_peers = known_peers if known_peers else []
+        self.connections = []
         self.lock = threading.Lock()
-        self.seen_msgs = set()          # mensagens já vistas
+        self.seen_msgs = set()
 
     def start(self):
-        # inicia servidor em thread separada
         threading.Thread(target=self._start_server, daemon=True).start()
 
-        # conecta a peers conhecidos
         for peer_host, peer_port in self.known_peers:
             self.connect_to_peer(peer_host, peer_port)
 
-        # loop para mandar mensagens digitadas
         self._input_loop()
 
     def _start_server(self):
@@ -55,17 +52,13 @@ class Peer:
                 break
             msg_id = msg.get("id")
 
-            # Verifica duplicata
             if msg_id in self.seen_msgs:
-                continue  # já recebida → descarta
+                continue
 
-            # Marca como vista
             self.seen_msgs.add(msg_id)
 
-            # Processa mensagem
             print(f"[RECEBIDO] {msg}")
 
-            # Repassa para outros peers (exceto quem enviou)
             self.broadcast(msg, exclude=conn)
 
         conn.close()
@@ -76,7 +69,7 @@ class Peer:
             if text.strip().lower() == "sair":
                 break
             msg = generate_msg("msg", f"{self.host}:{self.port}", text)
-            self.seen_msgs.add(msg["id"])  # marca antes de enviar
+            self.seen_msgs.add(msg["id"])
             self.broadcast(msg)
 
     def broadcast(self, msg, exclude=None):
@@ -97,13 +90,22 @@ if __name__ == "__main__":
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--peer", action="append", help="host:port de peer conhecido")
+    parser.add_argument("--bootstrap", help="arquivo JSON com peers (descoberta)")
 
     args = parser.parse_args()
+
     known_peers = []
     if args.peer:
         for p in args.peer:
             host, port = p.split(":")
             known_peers.append((host, int(port)))
+
+    if args.bootstrap:
+        try:
+            from discovery import load_peers_from_file
+            known_peers.extend(load_peers_from_file(args.bootstrap))
+        except Exception as e:
+            print(f"[ERRO] Falha ao carregar bootstrap: {e}")
 
     peer = Peer(args.host, args.port, known_peers)
     peer.start()
